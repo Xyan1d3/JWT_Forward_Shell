@@ -1,17 +1,37 @@
 # JWT Reverse Shell
+This is a modified version of IppSec's forward-shell, designed to exploit command injection vulnerabilities via JWT tokens. Command output is displayed directly on the web page.
 
-This is a modified version of [IppSec's Forward Shell](https://github.com/IppSec/forward-shell) which does the command injection via JWT Token and command output is displayed on the webpage.
+## Background
+While testing a web application, I discovered a JWT token containing a `cmd` parameter and had access to the JWT secret key. By injecting commands directly into the `cmd` parameter (without spaces), signing the JWT with the HS256 key, and sending a GET request to the server, the command output would appear on the website.
 
-I encountered an webapp which had JWT which had a `cmd` parameter and I also had the JWT Secret Key.
-Which on adding commands to it without a space and signing with the `JWT HS256 Key` and then sending a GET Request on the webserver gave me the results on the webpage.
-Now, The obious choice was to get a reverse shell which I was unable to due to the presence of a strong firewall policy.
+Due to a strict firewall policy, obtaining a traditional reverse shell was not feasible—so I built this solution as an alternative.
 
-# Internal Working
-- You have the JWT Secret and the JWT has a `cmd` parameter which takes any command and executes on the server and presents us the output on the website.
-- We have an mkfifo pipe which is working by placing commands in the `/dev/shm/ip` and using threading to `cat /dev/shm/op` perodically and prints the output of the commands incase we have some and then clears the `/dev/shm/op` file.
-- [BETA]I also, added an file upload feature incase you want to upload files which uses base64 stream to upload files
+## Internal Workflow
+- **JWT-based Command Execution**  
+The server executes any command passed via the `cmd` parameter in the JWT, and returns the output in the HTTP response.
 
-# MkFifo Pipe's Working
-- It create's two files `/dev/shm/ip` which is the input file and the `/dev/shm/op` which is the output file.
-- Now, A `mkfifo` pipe is created which take's any linux commands in the `/dev/shm/ip` and executes them and place's their output in the `/dev/shm/op` file.
-- Our job is to echo any command into the `/dev/shm/ip` file and perodically `cat /dev/shm/op` file to get the output of our commands.
+- **Named Pipe (mkfifo) for Shell Emulation**
+
+  - Commands are written into `/dev/shm/ip`.
+  - A background thread on the server reads /dev/shm/ip, executes the commands, and writes the output to /dev/shm/op.
+  - The client periodically reads from /dev/shm/op to fetch the command output and clears the file afterward.
+
+- [BETA] File Upload Feature  
+  A basic file upload mechanism is included. It streams files using base64 encoding and sends them to the target system.
+
+## mkfifo Pipe Mechanics
+- Two files are used in `/dev/shm/`:
+
+  - `ip`: input commands
+
+  - `op`: output results
+
+- The flow works as follows:
+
+  - A named pipe is created to handle input/output.
+
+  - Commands are echoed into `/dev/shm/ip`.
+
+  - The pipe executes the commands and writes the results into `/dev/shm/op`.
+
+  - The client polls `/dev/shm/op` for output and clears it after reading.
